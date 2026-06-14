@@ -81,11 +81,14 @@ Open the printed local URL, enter a name, and drag in some photos.
 
 ### Backend → Render
 
-- New Web Service, root directory `backend`
-- Build command: `npm install`
-- Start command: `npm start`
-- Environment variables: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`,
-  `CORS_ORIGIN` (your Vercel URL), `DRIVE_ROOT_FOLDER_NAME` (optional)
+This repo includes a `render.yaml` Blueprint:
+
+- Render dashboard → New → Blueprint → connect this GitHub repo
+- Render detects `render.yaml` and creates the `photo-uploader-backend` web service
+  (root directory `backend`, build `npm install`, start `npm start`)
+- Fill in the env vars it prompts for: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+  `GOOGLE_REFRESH_TOKEN` (from `backend/.env`), and `CORS_ORIGIN` (your Vercel URL,
+  added after the frontend is deployed)
 
 ### Frontend → Vercel
 
