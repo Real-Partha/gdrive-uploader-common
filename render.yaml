@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: photo-uploader-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: DRIVE_ROOT_FOLDER_NAME
+        value: PhotoUploads
