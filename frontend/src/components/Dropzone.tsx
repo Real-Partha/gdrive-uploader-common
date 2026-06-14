@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { CheckCircle2, ImageUp, Loader2, RotateCw } from 'lucide-react';
+import { useDropzone, type Accept } from 'react-dropzone';
+import { CheckCircle2, FileVideo, ImageUp, Loader2, RotateCw } from 'lucide-react';
 import { getPhotoDate } from '../lib/exifClient';
 import { uploadFileResumable } from '../lib/driveUpload';
 import { completeUpload, createUploadSession } from '../lib/api';
@@ -19,6 +19,8 @@ interface UploadItem {
 interface DropzoneProps {
   name: string;
   onUploaded: () => void;
+  accept: Accept;
+  kind: 'photo' | 'video';
 }
 
 function formatBytes(bytes: number): string {
@@ -33,7 +35,7 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
-export default function Dropzone({ name, onUploaded }: DropzoneProps) {
+export default function Dropzone({ name, onUploaded, accept, kind }: DropzoneProps) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const nameRef = useRef(name);
   nameRef.current = name;
@@ -105,9 +107,12 @@ export default function Dropzone({ name, onUploaded }: DropzoneProps) {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'image/*': [] },
+    accept,
     disabled,
   });
+
+  const Icon = kind === 'video' ? FileVideo : ImageUp;
+  const label = kind === 'video' ? 'videos' : 'photos';
 
   return (
     <div className="w-full">
@@ -122,14 +127,14 @@ export default function Dropzone({ name, onUploaded }: DropzoneProps) {
         }`}
       >
         <input {...getInputProps()} />
-        <ImageUp className="mb-3 size-10" />
+        <Icon className="mb-3 size-10" />
         {disabled ? (
           <p className="text-sm">Enter your name above to start uploading</p>
         ) : isDragActive ? (
-          <p className="text-sm font-medium">Drop your photos here</p>
+          <p className="text-sm font-medium">Drop your {label} here</p>
         ) : (
           <>
-            <p className="text-sm font-medium">Drag & drop photos here, or click to choose files</p>
+            <p className="text-sm font-medium">Drag & drop {label} here, or click to choose files</p>
             <p className="mt-1 text-xs text-gray-500">Large files upload directly to Drive in chunks — no size worries</p>
           </>
         )}
@@ -142,7 +147,13 @@ export default function Dropzone({ name, onUploaded }: DropzoneProps) {
               key={item.id}
               className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3"
             >
-              <img src={item.previewUrl} alt="" className="size-12 shrink-0 rounded-lg object-cover" />
+              {kind === 'video' ? (
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-white/5 text-purple-300">
+                  <FileVideo className="size-6" />
+                </div>
+              ) : (
+                <img src={item.previewUrl} alt="" className="size-12 shrink-0 rounded-lg object-cover" />
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <p className="truncate text-sm font-medium text-gray-200">{item.file.name}</p>

@@ -33,7 +33,23 @@ export default function App() {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20 backdrop-blur">
-            <Dropzone name={name} onUploaded={() => setRefreshSignal((s) => s + 1)} />
+            <h2 className="mb-3 text-sm font-medium text-gray-300">Photos</h2>
+            <Dropzone
+              name={name}
+              onUploaded={() => setRefreshSignal((s) => s + 1)}
+              accept={{ 'image/*': [] }}
+              kind="photo"
+            />
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20 backdrop-blur">
+            <h2 className="mb-3 text-sm font-medium text-gray-300">Videos</h2>
+            <Dropzone
+              name={name}
+              onUploaded={() => setRefreshSignal((s) => s + 1)}
+              accept={{ 'video/mp4': ['.mp4'], 'video/quicktime': ['.mov'] }}
+              kind="video"
+            />
           </div>
 
           <Leaderboard refreshSignal={refreshSignal} />
