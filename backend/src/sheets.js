@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import { getOAuth2Client } from './googleAuth.js';
 import { ensureRootFolder } from './drive.js';
+import { withRetry } from './util/retry.js';
 
 const SPREADSHEET_NAME = 'UploadRecords';
 const UPLOADS_TAB = 'Uploads';
@@ -24,12 +25,16 @@ function drive() {
 }
 
 async function findExistingSpreadsheet(rootFolderId) {
-  const res = await drive().files.list({
-    q: `name = '${SPREADSHEET_NAME}' and mimeType = '${SPREADSHEET_MIME}' and trashed = false and '${rootFolderId}' in parents`,
-    fields: 'files(id, name)',
-    spaces: 'drive',
-    pageSize: 1,
-  });
+  const res = await withRetry(() =>
+    drive().files.list({
+      q: `name = '${SPREADSHEET_NAME}' and mimeType = '${SPREADSHEET_MIME}' and trashed = false and '${rootFolderId}' in parents`,
+      fields: 'files(id, name, createdTime)',
+      orderBy: 'createdTime',
+      spaces: 'drive',
+      pageSize: 10,
+    })
+  );
+  // Pick the oldest if duplicates exist, so things converge on one canonical sheet.
   return res.data.files?.[0]?.id ?? null;
 }
 
@@ -83,21 +88,65 @@ export async function ensureRecordSheet() {
   return spreadsheetIdPromise;
 }
 
+// Sheets enforces a per-user "write requests per minute" quota. When many
+// uploads complete around the same time, appending one row per upload can
+// blow through that quota (429 rateLimitExceeded). Instead, queue rows and
+// flush them in a single batched `append` call every FLUSH_DELAY_MS.
+const FLUSH_DELAY_MS = 2000;
+const MAX_BATCH_SIZE = 200;
+
+let pendingRows = [];
+let flushTimer = null;
+
+function rowToValues(row) {
+  return [row.timestamp, row.name, row.fileName, row.photoDate, row.sizeBytes, row.driveLink];
+}
+
+function scheduleFlush() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    flushPendingRows();
+  }, FLUSH_DELAY_MS);
+}
+
+async function flushPendingRows() {
+  if (pendingRows.length === 0) return;
+
+  const batch = pendingRows.splice(0, MAX_BATCH_SIZE);
+  if (pendingRows.length > 0) scheduleFlush();
+
+  try {
+    const spreadsheetId = await ensureRecordSheet();
+
+    await withRetry(() =>
+      sheets().spreadsheets.values.append({
+        spreadsheetId,
+        range: `${UPLOADS_TAB}!A:F`,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: {
+          values: batch.map(({ row }) => rowToValues(row)),
+        },
+      })
+    );
+
+    batch.forEach(({ resolve }) => resolve());
+  } catch (err) {
+    batch.forEach(({ reject }) => reject(err));
+  }
+}
+
 /**
- * Appends one row to the Uploads tab.
+ * Appends one row to the Uploads tab. Rows are queued and written to Sheets
+ * in small batches to stay within the Sheets API's write-requests-per-minute
+ * quota under concurrent uploads.
  * @param {{ timestamp: string, name: string, fileName: string, photoDate: string, sizeBytes: number, driveLink: string }} row
  */
-export async function appendUploadRow(row) {
-  const spreadsheetId = await ensureRecordSheet();
-
-  await sheets().spreadsheets.values.append({
-    spreadsheetId,
-    range: `${UPLOADS_TAB}!A:F`,
-    valueInputOption: 'RAW',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: {
-      values: [[row.timestamp, row.name, row.fileName, row.photoDate, row.sizeBytes, row.driveLink]],
-    },
+export function appendUploadRow(row) {
+  return new Promise((resolve, reject) => {
+    pendingRows.push({ row, resolve, reject });
+    scheduleFlush();
   });
 }
 
@@ -105,10 +154,12 @@ export async function appendUploadRow(row) {
 export async function getSummary() {
   const spreadsheetId = await ensureRecordSheet();
 
-  const res = await sheets().spreadsheets.values.get({
-    spreadsheetId,
-    range: `${SUMMARY_TAB}!A1:B100`,
-  });
+  const res = await withRetry(() =>
+    sheets().spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SUMMARY_TAB}!A1:B100`,
+    })
+  );
 
   const rows = res.data.values ?? [];
   const [header, ...data] = rows;

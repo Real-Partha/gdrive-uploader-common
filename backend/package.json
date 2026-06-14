@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "get-refresh-token": "node scripts/get-refresh-token.js"
+    "get-refresh-token": "node scripts/get-refresh-token.js",
+    "merge-duplicates": "node scripts/merge-duplicate-folders.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
